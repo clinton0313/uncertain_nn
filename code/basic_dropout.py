@@ -13,11 +13,13 @@ from tensorflow.keras import layers
 from tensorflow.keras.layers import BatchNormalization, Dense, Conv2D, MaxPool2D, Dropout, Flatten
 from tensorflow.keras.layers.experimental.preprocessing import Rescaling
 from tensorflow.keras.models import Sequential
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 #Global Variables
 DATA_DIR = pathlib.Path("horse_or_human")
 LABELS = {0: "horse", 1: "human"}
+CHECKPOINT_PATH = "checkpoints"
 
 #%%
 class MCDropout(Dropout):
@@ -94,18 +96,20 @@ class CNNmodel(Model):
         #Save and set dropout layers
         original_mc_dropout = self.mc_dropout
         self.mc_dropout = True
-        self._set_dropout_layers
+        self._set_dropout_layers()
         predictions = tf.stack([self.call(x) for _ in range(T)], axis=0)
 
         #Return dropout layers to original setting
         self.mc_dropout = original_mc_dropout
         self._set_dropout_layers
 
-        predictions = tf.nn.softmax(predictions, axis=2)
-        labels = tf.cast(tf.argmax(predictions, axis=2), dtype=tf.float64)
-        mean = tf.math.reduce_mean(labels, axis=0)
-        var = tf.math.reduce_variance(labels, axis=0) #SHOULD I BE TAKING THE VARIANCE BEFORE OR AFTER ARGMAX???
-        return mean, var
+        #Dimension T x B x C  ~~~ NEED TO TEST
+        soft = tf.nn.softmax(predictions, axis=2)
+        means = tf.math.reduce_mean(soft, axis=0)
+        H_hat = -means * tf.math.log(means)
+        H = -1 * tf.math.reduce_mean(soft * tf.math.log(soft), axis = 0)
+        mutual_info = H_hat - H
+        return means, mutual_info
 
 class CNNPlotter():
     def __init__(self, model:CNNmodel=None, labels:dict={}):
@@ -138,37 +142,40 @@ class CNNPlotter():
         assert isinstance(labels, dict), f"Labels should be a dictionary of labels, instead got {labels}"
         self._labels = labels
         
-
-    def classify_image(self, img, mc = False, T=10):
+    def classify_image(self, img, mc = False, T=100):
         self._model_check()
         self._label_check()
         img = tf.reshape(img, [-1, 300, 300, 3])
         if mc:
-            class_pred, pred_proba = self.model.mc_predict(img, T=T)
-            class_pred = 1 if class_pred >= 0.5 else 0
-            class_pred = self._labels[class_pred] if self._labels else class_pred
+            class_pred, uncertainty = self.model.mc_predict(img, T=T)
+            scores = tf.squeeze(class_pred).numpy()
+            score = np.max(class_pred)
+            label = self._labels[np.argmax(scores)] if self._labels != {} else np.argmax(scores)
+            uncertainty = tf.squeeze(uncertainty).numpy().sum()
         else:
             prediction = self.model.predict(img)
-            score = tf.nn.softmax(prediction)
-            class_pred = np.argmax(score) if self._labels == {} else self._labels[np.argmax(score)]
-            pred_proba = np.max(score)
-        return class_pred, pred_proba
+            scores = tf.nn.softmax(prediction)
+            score = np.max(scores)
+            label = self._labels[np.argmax(scores)] if self._labels != {} else np.argmax(scores)
+            uncertainty = 0
+        return label, score, uncertainty
 
-    def plot_prediction(self, img, ax=None, mc = False, T = 10):
-        class_pred, pred_proba = self.classify_image(img, mc=mc, T=T)
+    def plot_prediction(self, img, ax=None, mc = False, T = 100):
         if not ax:
             self.fig, ax = plt.subplots()
         ax.axis("off")
         ax.imshow(tf.squeeze(img))
-        if mc:
-            ax.set_title(f"Class: {class_pred}\nVariance: {round(float(pred_proba), 1)}")
-        elif not mc:
-            ax.set_title(f"Class: {class_pred}\nSoftmax: {round(float(pred_proba), 1)}")
+
+        label, score, uncertainty = self.classify_image(img, mc=mc, T=T)
+        ax.set_title(f"Predicted Class: {label}\nSoftmax Score: {score:.2f}\nUncetainty: {uncertainty:.2f}")
 
     def plot_batch(self, images, nrow, ncol, figsize=(16,16), predict=False, mc=False, T=10):
         assert len(images) == nrow * ncol, "Not the same number of images as grid"
         self.fig, ax = plt.subplots(nrow, ncol, figsize=figsize, tight_layout=True)
-        self.fig.suptitle(lambda _: "MC Dropout" if mc else "Softmax")
+        title = ""
+        if predict:
+            title = "MC Dropout" if mc else "Softmax"
+        self.fig.suptitle(title)
         self.fig.set_facecolor("white")
         grid_pos = list(itertools.product(range(nrow), range(ncol)))
         for img, (i, j) in zip(images, grid_pos):
@@ -210,34 +217,47 @@ ds = img_folder.as_dataset(
 train_ds = ds["train"].cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
 val_ds = ds["validate"].cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
-# %%
-#Specify model
-model = CNNmodel(num_classes=2)
-optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
-loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
+# # %%
+# #Specify model
+# model = CNNmodel(num_classes=2, p_dropout=0.5)
+# optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+# loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
+# checkpoint = ModelCheckpoint(os.path.join(CHECKPOINT_PATH, "saved_weights_p7"), save_weights_only=True, save_best_only=True)
+# early_stopping = EarlyStopping(patience=10, restore_best_weights=True)
+
+
+# #%%
+# #Compile and fit
+# model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
+# history = model.fit(train_ds, 
+#     validation_data = val_ds, 
+#     epochs = 30, 
+#     callbacks = [checkpoint, early_stopping],
+#     verbose = 1)
+
+# #Plot our losses
+
+# results = pd.DataFrame(history.history)
+# res_fig, res_ax = plt.subplots(figsize=(14,14))
+# res_ax = results.plot(ax=res_ax)
+# res_ax.grid(True)
 
 #%%
-#Compile and fit
-model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
-history = model.fit(train_ds, validation_data = val_ds, epochs = 1, verbose = 1)
+#Load Saved Model
+model = CNNmodel(num_classes=2, p_dropout=0.5)
+model.load_weights(os.path.join(CHECKPOINT_PATH, "saved_weights"))
 
-#%%
-#Plot our losses
-
-results = pd.DataFrame(history.history)
-res_fig, res_ax = plt.subplots(figsize=(14,14))
-res_ax = results.plot(ax=res_ax)
-res_ax.grid(True)
 
 #%%
 #Plot some predictions!
 images, labels = next(iter(val_ds))
 
 cnn_plotter.model = model
+cnn_plotter.labels = LABELS
 
 cnn_plotter.plot_batch(images, 4, 4, predict=True)
 softmax_fig = cnn_plotter.fig
 #%%
-cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True)
+cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True, T=1000)
 mc_dropout_fig = cnn_plotter.fig
 # %%
