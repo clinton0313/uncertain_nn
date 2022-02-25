@@ -23,11 +23,10 @@ class DropConnect(Dense):
         if inputs.dtype.base_dtype != self._compute_dtype_object.base_dtype:
             inputs = math_ops.cast(inputs, dtype=self._compute_dtype_object)
         #Drop Connect Code to mask the kernel
-        print(f"Test print!")
         if training:
             mask = tf.cast(tf.random.uniform(shape=self.kernel.shape, seed=1234) <= self.p_dropout, dtype=self.kernel.dtype)
             kernel = mask * self.kernel
-            print(f"Using dropout, while trianing is {training}")
+
         else:
             kernel = self.kernel
         #Code below from Tensorflow Dense Class

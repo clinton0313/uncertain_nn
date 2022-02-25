@@ -1,7 +1,7 @@
 #%%
 from matplotlib import pyplot as plt
 import numpy as np
-import os, PIL, pathlib, random
+import os, PIL, pathlib, random, pickle
 import pandas as pd
 
 import tensorflow as tf
@@ -17,21 +17,6 @@ DATA_DIR = pathlib.Path("horse_or_human")
 LABELS = {0: "horse", 1: "human"}
 CHECKPOINT_PATH = "checkpoints"
 
-
-#%%
-#Plot some horses and some humans
-humans = list(DATA_DIR.glob('*/humans/*'))
-horses = list(DATA_DIR.glob('*/horses/*'))
-horse_sample = [PIL.Image.open(str(horse)) for horse in random.sample(horses, 8)]
-human_sample = [PIL.Image.open(str(human)) for human in random.sample(humans, 8)]
-
-cnn_plotter = CNNPlotter()
-cnn_plotter.plot_batch(horse_sample, 2, 4, figsize=(8, 16))
-cnn_plotter.fig
-
-#%%
-cnn_plotter.plot_batch(human_sample, 2, 4, figsize=(8, 16))
-cnn_plotter.fig
 #%%
 #Load the data
 batch_size = 16
@@ -87,45 +72,34 @@ val_generator = val_datagen.flow_from_directory(
 
 # %%
 #Specify model
-model = CNNDropout(num_classes=2, p_dropout=0.5)
+models = [
+    CNNDropout(num_classes=2, p_dropout=0.5), 
+    CNNDropout(num_classes =2, p_dropoput=0.7),
+    CNNDropConnect(num_classes=2, p_dropout=0.5),
+    CNNDropConnect(num_classes=2, p_dropout=0.7)
+    ]
+
+modelnames = ["dropout_p5", "dropout_p7", "dropconnect_p5", "dropconnect_p7"]
+
+checkpoints = [ModelCheckpoint(os.path.join(CHECKPOINT_PATH, name), save_weights_only=True, save_best_only=True) for name in modelnames]
+
 optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
-checkpoint = ModelCheckpoint(os.path.join(CHECKPOINT_PATH, "dropconnect_weights_p5"), save_weights_only=True, save_best_only=True)
+checkpoint = ModelCheckpoint(os.path.join(CHECKPOINT_PATH, "data_augmentation_weights_p5"), save_weights_only=True, save_best_only=True)
 early_stopping = EarlyStopping(patience=10, restore_best_weights=True)
 
 #%%
 #Compile and fit
-model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
 
-history = model.fit(train_ds, 
-    validation_data = val_ds, 
-    epochs = 1, 
-    callbacks = [checkpoint, early_stopping],
-    verbose = 1)
+for model, checkpoint, name in zip(models, checkpoints, modelnames):
 
-#Plot our losses
+    model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
 
-results = pd.DataFrame(history.history)
-res_fig, res_ax = plt.subplots(figsize=(14,14))
-res_ax = results.plot(ax=res_ax)
-res_ax.grid(True)
+    history = model.fit(train_ds, 
+        validation_data = val_ds, 
+        epochs = 100, 
+        callbacks = [checkpoint, early_stopping],
+        verbose = 1)
 
-#%%
-#Load Saved Model
-model = CNNDropout(num_classes=2, p_dropout=0.5)
-model.load_weights(os.path.join(CHECKPOINT_PATH, "saved_weights"))
-
-
-#%%
-#Plot some predictions!
-images, labels = next(iter(val_ds))
-
-cnn_plotter.model = model
-cnn_plotter.labels = LABELS
-
-cnn_plotter.plot_batch(images, 4, 4, predict=True)
-softmax_fig = cnn_plotter.fig
-#%%
-cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True, T=1000)
-mc_dropout_fig = cnn_plotter.fig
-# %%
+    with open(os.path.join(CHECKPOINT_PATH, f"{name}_history.pkl"), "wb") as outfile:
+        pickle.dump(history, outfile)
