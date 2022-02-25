@@ -24,7 +24,7 @@ class DropConnect(Dense):
             inputs = math_ops.cast(inputs, dtype=self._compute_dtype_object)
         #Drop Connect Code to mask the kernel
         if training:
-            mask = tf.cast(tf.random.uniform(shape=self.kernel.shape, seed=1234) <= self.p_dropout, dtype=self.kernel.dtype)
+            mask = tf.cast(tf.random.uniform(shape=self.kernel.shape) >= self.p_dropout, dtype=self.kernel.dtype)
             kernel = mask * self.kernel
 
         else:
