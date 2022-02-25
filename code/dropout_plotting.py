@@ -55,15 +55,23 @@ val_ds = ds["validate"].cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
 #%%
 #Load Saved Model
-model = CNNDropout(num_classes=2, p_dropout=0.5)
-model.load_weights(os.path.join(CHECKPOINT_PATH, "saved_weights"))
+model = CNNDropConnect(num_classes=2, p_dropout=0.5)
+optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
+model.compile(optimizer=optimizer, loss=loss_fn)
 
-with open(os.path.join(CHECKPOINT_PATH, "dropout_p5_history.pkl"), "rb") as infile:
+model.load_weights(os.path.join(CHECKPOINT_PATH, modelnames[0]))
+
+
+#%%
+with open(os.path.join(CHECKPOINT_PATH, f"{modelnames[0]}_history.pkl"), "rb") as infile:
     history = pickle.load(infile)
+
+
 
 #Plot our losses
 
-results = pd.DataFrame(history.history)
+results = pd.DataFrame(history)
 res_fig, res_ax = plt.subplots(figsize=(14,14))
 res_ax = results.plot(ax=res_ax)
 res_ax.grid(True)
