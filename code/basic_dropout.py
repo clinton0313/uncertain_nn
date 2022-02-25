@@ -7,13 +7,16 @@ import pandas as pd
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from HH_CNN import CNNmodel, CNNPlotter
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from HH_CNN import CNNDropConnect, CNNDropout, CNNPlotter
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 #Global Variables
+tf.random.set_seed(1234)
 DATA_DIR = pathlib.Path("horse_or_human")
 LABELS = {0: "horse", 1: "human"}
 CHECKPOINT_PATH = "checkpoints"
+
 
 #%%
 #Plot some horses and some humans
@@ -48,21 +51,55 @@ ds = img_folder.as_dataset(
 train_ds = ds["train"].cache().shuffle(1000).prefetch(buffer_size=tf.data.AUTOTUNE)
 val_ds = ds["validate"].cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
+#%%
+
+#Using Data Augmentation
+
+train_datagen = ImageDataGenerator(
+    featurewise_center=True,
+    featurewise_std_normalization=True,
+    rescale=(1./255),
+    zoom_range=0.2,
+    rotation_range=30,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    horizontal_flip=True
+)
+
+val_datagen = ImageDataGenerator(
+    rescale=(1./255)
+)
+
+train_generator = train_datagen.flow_from_directory(
+    directory=os.path.join(str(DATA_DIR), "train"),
+    target_size=(300,300),
+    class_mode="binary",
+    batch_size=16,
+    shuffle=True
+)
+
+val_generator = val_datagen.flow_from_directory(
+    directory=os.path.join(str(DATA_DIR), "validate"),
+    target_size=(300,300),
+    class_mode="binary",
+    batch_size=16
+)
+
 # %%
 #Specify model
-model = CNNmodel(num_classes=2, p_dropout=0.5)
+model = CNNDropout(num_classes=2, p_dropout=0.5)
 optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
-checkpoint = ModelCheckpoint(os.path.join(CHECKPOINT_PATH, "saved_weights_p7"), save_weights_only=True, save_best_only=True)
+checkpoint = ModelCheckpoint(os.path.join(CHECKPOINT_PATH, "dropconnect_weights_p5"), save_weights_only=True, save_best_only=True)
 early_stopping = EarlyStopping(patience=10, restore_best_weights=True)
-
 
 #%%
 #Compile and fit
 model.compile(optimizer=optimizer, loss=loss_fn, metrics=["accuracy"])
+
 history = model.fit(train_ds, 
     validation_data = val_ds, 
-    epochs = 30, 
+    epochs = 1, 
     callbacks = [checkpoint, early_stopping],
     verbose = 1)
 
@@ -75,7 +112,7 @@ res_ax.grid(True)
 
 #%%
 #Load Saved Model
-model = CNNmodel(num_classes=2, p_dropout=0.5)
+model = CNNDropout(num_classes=2, p_dropout=0.5)
 model.load_weights(os.path.join(CHECKPOINT_PATH, "saved_weights"))
 
 

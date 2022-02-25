@@ -1,2 +1,7 @@
+<<<<<<< HEAD
 model_checkpoint_path: "saved_weights"
 all_model_checkpoint_paths: "saved_weights"
+=======
+model_checkpoint_path: "dropconnect_weights_p5"
+all_model_checkpoint_paths: "dropconnect_weights_p5"
+>>>>>>> f9b8fd5... Tested and fixed Dropconnect class. Functioning

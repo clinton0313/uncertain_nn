@@ -1,26 +1,21 @@
 from typing import Sequence
 from matplotlib import pyplot as plt
 import numpy as np
-import os, PIL, pathlib, itertools, random
+import itertools
 import pandas as pd
 from abc import abstractmethod
 
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from tensorflow.keras import Model
-from tensorflow.keras import layers
-from tensorflow.keras.layers import BatchNormalization, Dense, Conv2D, MaxPool2D, Dropout, Flatten
+
+from tensorflow.keras.layers import Dense, Conv2D, MaxPool2D, Dropout, Flatten
 from tensorflow.keras.layers.experimental.preprocessing import Rescaling
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from CustomDropout import MCDropConnect, MCDropout, DropConnect
+from CustomDropout import MCDropout, DropConnect
 
-
-class CNNmodel(Model):
-    def __init__(self, num_classes:int, p_dropout:Sequence = 0.2, mc_dropout:bool = False):
-        super(CNNmodel, self).__init__()
+class CNNDropout(Model):
+    def __init__(self, num_classes:int, p_dropout:Sequence = 0.2):
+        super(CNNDropout, self).__init__()
         self.n_linear = 3
-        self.mc_dropout = mc_dropout
         self.p_dropout = p_dropout
         self.num_classes = num_classes
 
@@ -30,15 +25,6 @@ class CNNmodel(Model):
         self.lin1 = Dense(128, activation="relu")
         self.lin2 = Dense(64, activation="relu")
         self.lin3 = Dense(self.num_classes)
-
-    @property
-    def mc_dropout(self) -> bool:
-        return self._mc_dropout
-    
-    @mc_dropout.setter
-    def mc_dropout(self, mc_dropout:bool):
-        assert isinstance(mc_dropout, bool), f"mc_dropout must be a boolean, instead got {mc_dropout}"
-        self._mc_dropout = mc_dropout
 
     @property
     def p_dropout(self) -> Sequence:
@@ -54,13 +40,6 @@ class CNNmodel(Model):
             assert 0 <= p <= 1, "p needs to be a valid probability"
             p = [p for _ in range(self.n_linear)]
         self._p_dropout = p
-        self._set_dropout_layers()
-    
-    def _set_dropout_layers(self):
-        if not self._mc_dropout:
-            self._dropout_layers = [Dropout(self.p_dropout[i]) for i in range(self.n_linear)]
-        elif self._mc_dropout:
-            self._dropout_layers = [MCDropout(self.p_dropout[i]) for i in range(self.n_linear)]
 
     def featurize(self, x):
         x = Rescaling(1./255)(x)
@@ -73,26 +52,18 @@ class CNNmodel(Model):
         x = Flatten()(x)
         return x
     
-    def call(self, x):
+    def call(self, x, training=False):
         x = self.featurize(x)
-        x = self._dropout_layers[0](x)
+        x = Dropout(self.p_dropout[0])(x, training=training)
         x = self.lin1(x)
-        x = self._dropout_layers[1](x)
+        x = Dropout(self.p_dropout[1])(x, training=training)
         x = self.lin2(x)
-        x = self._dropout_layers[2](x)
+        x = Dropout(self.p_dropout[2])(x, training=training)
         x = self.lin3(x)
         return x
 
     def mc_predict(self, x, T):
-        #Save and set dropout layers
-        original_mc_dropout = self.mc_dropout
-        self.mc_dropout = True
-        self._set_dropout_layers()
-        predictions = tf.stack([self.call(x) for _ in range(T)], axis=0)
-
-        #Return dropout layers to original setting
-        self.mc_dropout = original_mc_dropout
-        self._set_dropout_layers
+        predictions = tf.stack([self.call(x, training=True) for _ in range(T)], axis=0)
 
         #Dimension T x B x C  ~~~ NEED TO TEST
         soft = tf.nn.softmax(predictions, axis=2)
@@ -102,8 +73,22 @@ class CNNmodel(Model):
         mutual_info = H_hat - H
         return means, mutual_info
 
+class CNNDropConnect(CNNDropout):
+    def __init__(self, *args, **kwargs):
+        super(CNNDropConnect, self).__init__(*args, **kwargs)
+        self.lin1 = DropConnect(units = 128, p_dropout=self.p_dropout[0])
+        self.lin2 = DropConnect(units = 64, p_dropout=self.p_dropout[1])
+        self.lin3 = DropConnect(units = self.num_classes, p_dropout=self.p_dropout[2])
+    
+    def call(self, x, training=False):
+        x = self.featurize(x)
+        x = self.lin1(x, training=training)
+        x = self.lin2(x, training=training)
+        x = self.lin3(x, training=training)
+        return x
+
 class CNNPlotter():
-    def __init__(self, model:CNNmodel=None, labels:dict={}):
+    def __init__(self, model:CNNDropout=None, labels:dict={}):
         self.model = model
         self.labels = labels
         self.fig = None
@@ -121,7 +106,7 @@ class CNNPlotter():
     
     @model.setter
     def model(self, model):
-        assert isinstance(model, (CNNmodel, type(None))), "CNNPlotter only accepts a CNNmodel model."
+        assert isinstance(model, (CNNDropout, type(None))), "CNNPlotter only accepts a CNNmodel model."
         self._model = model
     
     @property
