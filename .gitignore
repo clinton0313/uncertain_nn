@@ -1,5 +1,13 @@
+<<<<<<< HEAD
 trieste/
 code/horse-or-human.zip
 code/validation-horse-or-human.zip
 code/horse_or_human/
 code/checkpoints/
+=======
+trieste
+code/horse-or-human.zip
+code/validation-horse-or-human.zip
+code/horse_or_human
+code/checkpoints
+>>>>>>> basic_dropout
