@@ -6,7 +6,7 @@ from tensorflow.python.framework import sparse_tensor
 from tensorflow.python.eager import context
 # %%
 class DropConnect(Dense):
-    def __init__(self, p_dropout, *args, **kwargs):
+    def __init__(self, p_dropout=0.5, *args, **kwargs):
         self.p_dropout = p_dropout  
         super(DropConnect, self).__init__(*args, **kwargs)
     
