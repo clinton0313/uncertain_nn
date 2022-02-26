@@ -1,13 +1,10 @@
 #%%
 from matplotlib import pyplot as plt
-import numpy as np
 import os, PIL, pathlib, random, pickle
 import pandas as pd
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from HH_CNN import CNNDropConnect, CNNDropout, CNNPlotter
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
@@ -55,18 +52,17 @@ val_ds = ds["validate"].cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
 #%%
 #Load Saved Model
-model = CNNDropConnect(num_classes=2, p_dropout=0.5)
+model = CNNDropout(num_classes=2, p_dropout=0.7)
 optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
 model.compile(optimizer=optimizer, loss=loss_fn)
 
-model.load_weights(os.path.join(CHECKPOINT_PATH, modelnames[0]))
+model.load_weights(os.path.join(CHECKPOINT_PATH, modelnames[1]))
 
 
 #%%
-with open(os.path.join(CHECKPOINT_PATH, f"{modelnames[0]}_history.pkl"), "rb") as infile:
+with open(os.path.join(CHECKPOINT_PATH, f"{modelnames[1]}_history.pkl"), "rb") as infile:
     history = pickle.load(infile)
-
 
 
 #Plot our losses
@@ -90,6 +86,6 @@ cnn_plotter.labels = LABELS
 cnn_plotter.plot_batch(images, 4, 4, predict=True)
 softmax_fig = cnn_plotter.fig
 #%%
-cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True, T=1000)
+cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True, T=100)
 mc_dropout_fig = cnn_plotter.fig
 # %%

@@ -2,7 +2,6 @@ from typing import Sequence
 from matplotlib import pyplot as plt
 import numpy as np
 import itertools
-import pandas as pd
 from abc import abstractmethod
 
 import tensorflow as tf

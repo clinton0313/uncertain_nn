@@ -1,15 +1,11 @@
 #%%
-from matplotlib import pyplot as plt
-import numpy as np
-import os, PIL, pathlib, random, pickle
-import pandas as pd
+import os, pathlib, pickle
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, LearningRateScheduler, ReduceLROnPlateau
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.optimizers.schedules import ExponentialDecay
-from HH_CNN import CNNDropConnect, CNNDropout, CNNPlotter
+from HH_CNN import CNNDropConnect, CNNDropout
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
 #Global Variables
@@ -45,7 +41,7 @@ val_ds = ds["validate"].cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 train_datagen = ImageDataGenerator(
     rescale=(1./255),
     zoom_range=0.2,
-    rotation_range=30,
+    rotation_range=10,
     width_shift_range=0.2,
     height_shift_range=0.2,
     horizontal_flip=True
@@ -76,7 +72,7 @@ models = [
     CNNDropout(num_classes=2, p_dropout=0.5), 
     CNNDropout(num_classes =2, p_dropout=0.7),
     CNNDropConnect(num_classes=2, p_dropout=0.7),
-    CNNDropConnect(num_classe=2, p_dropout=0.9)
+    CNNDropConnect(num_classes=2, p_dropout=0.9)
     ]
 
 modelnames = [
@@ -89,7 +85,7 @@ checkpoints = [ModelCheckpoint(os.path.join(CHECKPOINT_PATH, name), save_weights
 
 #%%
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
+optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
 early_stopping = EarlyStopping(patience=20, restore_best_weights=True, monitor="val_loss")
 lr_scheduler = ReduceLROnPlateau(factor=0.5, patience=4, min_lr = 1e-8, verbose=1)
@@ -110,8 +106,8 @@ for model, checkpoint, name in zip(models, checkpoints, modelnames):
         print("No weights to load, starting to fit instead...")
 
 
-    history = model.fit(train_generator, 
-        validation_data = val_generator, 
+    history = model.fit(train_ds, 
+        validation_data = val_ds, 
         epochs = 100, 
         callbacks = [checkpoint, early_stopping, lr_scheduler],
         verbose = 1)
