@@ -1,4 +1,6 @@
 #%%
+import sys
+sys.path.append('..')
 from CustomDropout import DropConnect
 import tensorflow as tf
 from tensorflow.keras.models import Model
@@ -86,3 +88,5 @@ def test_p_dropout():
     
     assert 6850 <= np.sum(simulations) <=7150, \
         f"Expected to dropout around {p} of the passes but only dropped {np.sum(simulations)/len(simulations)}"
+
+# %%

@@ -13,7 +13,7 @@ tf.random.set_seed(1234)
 DATA_DIR = pathlib.Path("horse_or_human")
 LABELS = {0: "horse", 1: "human"}
 CHECKPOINT_PATH = "checkpoints"
-modelnames = ["dropout_p5", "dropout_p7", "dropconnect_p3", "dropconnect_p5"]
+modelnames = ["dropout_p5", "dropout_p7", "dropconnect_p5", "dropconnect_p7"]
 
 
 #%%
@@ -57,7 +57,7 @@ optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
 model.compile(optimizer=optimizer, loss=loss_fn)
 
-model.load_weights(os.path.join(CHECKPOINT_PATH, modelnames[2]))
+model.load_weights(os.path.join(CHECKPOINT_PATH, modelnames[1]))
 
 
 #%%
@@ -85,31 +85,7 @@ cnn_plotter.labels = LABELS
 
 cnn_plotter.plot_batch(images, 4, 4, predict=True)
 softmax_fig = cnn_plotter.fig
-
-#%%
-loader = iter(val_ds)
-for _ in range(len(val_ds)):
-    images, labels = next(loader)
-    cnn_plotter.gather_measure(images, labels)
-cnn_plotter.plot_measures(title="Softmax")
-
 #%%
 cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True, T=100)
 mc_dropout_fig = cnn_plotter.fig
-# %%
-
-catsdogs = tfds.load("cats_vs_dogs", batch_size=16, as_supervised=True)
-images, labels = next(iter(catsdogs["train"]))
-
-cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True, T=100)
-catsdogs_fig = cnn_plotter.fig
-
-# %%
-
-flowers = tfds.load("oxford_flowers102", batch_size=16, as_supervised=True)
-images, labels = next(iter(flowers["train"]))
-
-cnn_plotter.plot_batch(images, 4, 4, predict=True, mc=True, T=100)
-flowers_fig = cnn_plotter.fig
-
 # %%

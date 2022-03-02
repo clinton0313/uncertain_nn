@@ -4,8 +4,6 @@ import numpy as np
 import itertools
 from abc import abstractmethod
 
-import seaborn as sns
-from scipy import stats
 import tensorflow as tf
 from tensorflow.keras import Model
 
@@ -89,14 +87,10 @@ class CNNDropConnect(CNNDropout):
         return x
 
 class CNNPlotter():
-    def __init__(self, model:CNNDropout=None, labels:dict={}, img_height=300, img_width=300):
+    def __init__(self, model:CNNDropout=None, labels:dict={}):
         self.model = model
         self.labels = labels
         self.fig = None
-        self.ax = None
-        self.img_shape = (1, img_height, img_width, 3)
-        self.correct_scores = []
-        self.wrong_scores = []
 
     def _model_check(self):
         assert self._model, "This method requires a model to be set."
@@ -122,22 +116,11 @@ class CNNPlotter():
     def labels(self, labels):
         assert isinstance(labels, dict), f"Labels should be a dictionary of labels, instead got {labels}"
         self._labels = labels
-    
-    def _resize_image(self, img):
-        if img.shape != self.img_shape:
-            _, h, w, _ = self.img_shape
-            img = tf.image.resize(img, (h, w))
-            img = tf.reshape(img, self.img_shape)
-        return img
-    
-    def _rescale_image(self, img):
-        return Rescaling(1/np.max(img))(img)
-
-
+        
     def classify_image(self, img, mc = False, T=100):
         self._model_check()
         self._label_check()
-        img = self._resize_image(img)
+        img = tf.reshape(img, [-1, 300, 300, 3])
         if mc:
             class_pred, uncertainty = self.model.mc_predict(img, T=T)
             scores = tf.squeeze(class_pred).numpy()
@@ -151,18 +134,15 @@ class CNNPlotter():
             label = self._labels[np.argmax(scores)] if self._labels != {} else np.argmax(scores)
             uncertainty = 0
         return label, score, uncertainty
-    
 
     def plot_prediction(self, img, ax=None, mc = False, T = 100):
-        label, score, uncertainty = self.classify_image(img, mc=mc, T=T)
-        ax.set_title(f"Predicted Class: {label}\nSoftmax Score: {score:.2f}\nUncetainty: {uncertainty:.2f}")
-        img = self._resize_image(img)
-        img = self._rescale_image(img)
         if not ax:
             self.fig, ax = plt.subplots()
         ax.axis("off")
         ax.imshow(tf.squeeze(img))
 
+        label, score, uncertainty = self.classify_image(img, mc=mc, T=T)
+        ax.set_title(f"Predicted Class: {label}\nSoftmax Score: {score:.2f}\nUncetainty: {uncertainty:.2f}")
 
     def plot_batch(self, images, nrow, ncol, figsize=(16,16), predict=False, mc=False, T=10):
         assert len(images) == nrow * ncol, "Not the same number of images as grid"
@@ -179,35 +159,3 @@ class CNNPlotter():
             else: 
                 ax[i][j].imshow(img)
                 ax[i][j].axis("off")
-    
-    def reset_measures(self):
-        self.correct_scores = []
-        self.wrong_scores = []
-
-    def gather_measure(self, imgs, labels, batch=True, mc=False, T=100):
-        if not batch:
-            imgs = self._resize_image(img)
-            labels = tf.reshape(labels, (1, len(labels)))
-        for img, label in zip(imgs, labels):
-            pred_label, score, uncertainty = self.classify_image(img, mc, T)
-            measure = uncertainty if mc else score
-            if pred_label == self._labels[label.numpy()]:
-                self.correct_scores.append(measure)
-            else:
-                self.wrong_scores.append(measure)
-    
-    def plot_measures(self, title="", new_fig=True):
-        if new_fig:
-            self.fig, self.ax = plt.subplots(figsize=(14, 14), tight_layout=True)
-        
-        hist_kws = {"alpha": 0.5}
-
-        sns.distplot(self.correct_scores, hist_kws=hist_kws, color="blue", label="Correct", ax=self.ax)
-        sns.distplot(self.wrong_scores, hist_kws=hist_kws, color="red", label="Wrong", ax=self.ax)
-        self.ax.legend()
-        self.ax.set_xlim(0, 1)
-        for pos in ["top", "left", "right"]:
-            self.ax.spines[pos].set_visible(False)
-
-        self.ax.set_title(title, fontsize=18)
-        self.ax.set_xlabel("Uncertainty Score", fontsize=15)
