@@ -164,7 +164,7 @@ class CNNPlotter():
         ax.imshow(tf.squeeze(img))
 
 
-    def plot_batch(self, images, nrow, ncol, figsize=(16,16), predict=False, mc=False, T=10):
+    def plot_batch(self, images, nrow, ncol, figsize=(8,16), predict=False, mc=False, T=10):
         assert len(images) == nrow * ncol, "Not the same number of images as grid"
         self.fig, ax = plt.subplots(nrow, ncol, figsize=figsize, tight_layout=True)
         title = ""
@@ -184,30 +184,40 @@ class CNNPlotter():
         self.correct_scores = []
         self.wrong_scores = []
 
-    def gather_measure(self, imgs, labels, batch=True, mc=False, T=100):
+    def gather_measures(self, imgs, labels, batch=True, out_sample=False, mc=False, T=100):
         if not batch:
             imgs = self._resize_image(img)
             labels = tf.reshape(labels, (1, len(labels)))
         for img, label in zip(imgs, labels):
             pred_label, score, uncertainty = self.classify_image(img, mc, T)
-            measure = uncertainty if mc else score
-            if pred_label == self._labels[label.numpy()]:
-                self.correct_scores.append(measure)
+            measure = uncertainty if mc else 1 - score
+            if not out_sample:
+                if pred_label == self._labels[label.numpy()]:
+                    self.correct_scores.append(measure)
+                else:
+                    self.wrong_scores.append(measure)
             else:
                 self.wrong_scores.append(measure)
     
-    def plot_measures(self, title="", new_fig=True):
+    def plot_measures(self, title="", out_sample=False, wrong_label="Wrong", wrong_color="tab:red", new_fig=True):
         if new_fig:
             self.fig, self.ax = plt.subplots(figsize=(14, 14), tight_layout=True)
         
         hist_kws = {"alpha": 0.5}
 
-        sns.distplot(self.correct_scores, hist_kws=hist_kws, color="blue", label="Correct", ax=self.ax)
-        sns.distplot(self.wrong_scores, hist_kws=hist_kws, color="red", label="Wrong", ax=self.ax)
+        if not out_sample:
+            sns.distplot(self.correct_scores, bins=30, hist_kws=hist_kws, color="tab:cyan", label="Correct", ax=self.ax)
+        sns.distplot(self.wrong_scores, bins=30, hist_kws=hist_kws, color=wrong_color, label=wrong_label, ax=self.ax)
         self.ax.legend()
-        self.ax.set_xlim(0, 1)
+        self.ax.set_xlim(0, 0.5)
         for pos in ["top", "left", "right"]:
             self.ax.spines[pos].set_visible(False)
 
+        self.ax.set(ylabel=None, yticks=[])
         self.ax.set_title(title, fontsize=18)
         self.ax.set_xlabel("Uncertainty Score", fontsize=15)
+
+    def save_fig(self, path):
+        if self.fig != None:
+            self.fig.savefig(path, facecolor="white", transparent=False)
+            print("Fig saved!")
