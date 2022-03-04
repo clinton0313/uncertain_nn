@@ -18,9 +18,10 @@ os.chdir(os.path.dirname(os.path.realpath(__file__)))
 DATA_DIR = pathlib.Path("horse_or_human")
 LABELS = {0: "horse", 1: "human"}
 CHECKPOINT_PATH = "checkpoints"
-SAVEPATH = "figs"
+FIG_PATH = "figs"
+MEASURES_PATH = "measures"
 modelnames = ["dropout_p5", "dropout_p7", "dropconnect_p3", "dropconnect_p5"]
-os.makedirs(SAVEPATH, exist_ok=True)
+os.makedirs(FIG_PATH, exist_ok=True)
 
 #%%
 #Load the data
@@ -122,8 +123,8 @@ with open(os.path.join(CHECKPOINT_PATH, f"{modelnames[2]}_history.pkl"), "rb") a
 dropout_acc_fig = plot_history(dropout_hist, ["accuracy", "val_accuracy"], "MC Dropout with p = 0.5")
 dropconnect_acc_fig = plot_history(dropconnect_hist, ["accuracy", "val_accuracy"], "MC Dropconnect with p = 0.3")
 
-dropout_acc_fig.savefig(os.path.join(SAVEPATH, "dropout_acc.png"), facecolor="white", transparent=False)
-dropconnect_acc_fig.savefig(os.path.join(SAVEPATH, "dropconnect_acc.png"), facecolor="white", transparent=False)
+dropout_acc_fig.savefig(os.path.join(FIG_PATH, "dropout_acc.png"), facecolor="white", transparent=False)
+dropconnect_acc_fig.savefig(os.path.join(FIG_PATH, "dropconnect_acc.png"), facecolor="white", transparent=False)
 #%%
 
 #Load Prediction Measures
@@ -134,7 +135,7 @@ types = ["correct", "wrong"]
 colors = ["tab:blue", "tab:orange", "tab:purple", "tab:olive"]
 data_titles = {"horse": "Horse and Human", "cat": "Cats vs Dogs", "flower": "Flowers"}
 
-measures = load_measures(SAVEPATH, models, datasets)
+measures = load_measures(MEASURES_PATH, models, datasets)
 
 #%%
 #Plot Prediction Measures

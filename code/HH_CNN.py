@@ -164,12 +164,9 @@ class CNNPlotter():
         ax.imshow(tf.squeeze(img))
 
 
-    def plot_batch(self, images, nrow, ncol, figsize=(8,16), predict=False, mc=False, T=10):
+    def plot_batch(self, images, nrow, ncol, figsize=(8,16), title = "", predict=False, mc=False, T=10):
         assert len(images) == nrow * ncol, "Not the same number of images as grid"
         self.fig, ax = plt.subplots(nrow, ncol, figsize=figsize, tight_layout=True)
-        title = ""
-        if predict:
-            title = "MC Dropout" if mc else "Softmax"
         self.fig.suptitle(title)
         self.fig.set_facecolor("white")
         grid_pos = list(itertools.product(range(nrow), range(ncol)))

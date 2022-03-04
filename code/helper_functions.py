@@ -40,8 +40,8 @@ def evaluate_measures(SAVEPATH, model_titles, plotters, use_mc, datasets, datase
         model_title = title.replace(" ", "_")
         plotter.save_fig(os.path.join(SAVEPATH, f"{model_title.lower()}_eval.png"))
 
-def load_measures(SAVEPATH, models, datasets):
-    fig_files = os.listdir(SAVEPATH)
+def load_measures(savepath, models, datasets):
+    fig_files = os.listdir(savepath)
     pkl_filter = re.compile(r'^.*pkl')
     pkl_files = list(filter(pkl_filter.search, fig_files))
     measures = {}
@@ -51,7 +51,7 @@ def load_measures(SAVEPATH, models, datasets):
         for d in datasets:
             d_filter = re.compile(fr'^.*(?i){d}.*')
             d_files = list(filter(d_filter.search, m_files))
-            with open (os.path.join(SAVEPATH, d_files[0]), "rb") as infile:
+            with open (os.path.join(savepath, d_files[0]), "rb") as infile:
                 correct, wrong = pickle.load(infile)
             measures[f"{m}_{d}_correct"] = correct
             measures[f"{m}_{d}_wrong"] = wrong
