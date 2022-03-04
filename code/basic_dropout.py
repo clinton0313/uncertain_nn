@@ -69,25 +69,25 @@ val_generator = val_datagen.flow_from_directory(
 # %%
 #Specify model
 models = [
-    CNNDropout(num_classes=2, p_dropout=0.5), 
-    CNNDropout(num_classes =2, p_dropout=0.7),
-    CNNDropConnect(num_classes=2, p_dropout=0.7),
-    CNNDropConnect(num_classes=2, p_dropout=0.9)
+    # CNNDropout(num_classes=2, p_dropout=0.5), 
+    # CNNDropout(num_classes =2, p_dropout=0.7),
+    CNNDropConnect(num_classes=2, p_dropout=0.3),
+    CNNDropConnect(num_classes=2, p_dropout=0.5)
     ]
 
 modelnames = [
-    "dropout_p5", 
-    "dropout_p7", 
-    "dropconnect_p7"
-    "dropconnect_p9"
+    # "dropout_p5", 
+    # "dropout_p7", 
+    "dropconnect_p3",
+    "dropconnect_p5"
     ]
-checkpoints = [ModelCheckpoint(os.path.join(CHECKPOINT_PATH, name), save_weights_only=True, save_best_only=True, monitor="val_loss") for name in modelnames]
+checkpoints = [ModelCheckpoint(os.path.join(CHECKPOINT_PATH, name), save_weights_only=True, save_best_only=True, monitor="val_accuracy") for name in modelnames]
 
 #%%
 
 optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, name="crossentropy")
-early_stopping = EarlyStopping(patience=20, restore_best_weights=True, monitor="val_loss")
+early_stopping = EarlyStopping(patience=20, restore_best_weights=True, monitor="val_accuracy")
 lr_scheduler = ReduceLROnPlateau(factor=0.5, patience=4, min_lr = 1e-8, verbose=1)
 
 #%%
