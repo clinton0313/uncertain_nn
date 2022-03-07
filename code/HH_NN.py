@@ -1,18 +1,14 @@
 #%%
-# from this import d
 from typing import Sequence
 from matplotlib import pyplot as plt
 import numpy as np
-import os, sys
-import pandas as pd
+import os
 
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras import layers
-from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, LeakyReLU, LayerNormalization
+from tensorflow.keras.layers import Dense, Dropout, Activation
 from tensorflow.keras.layers.experimental.preprocessing import Normalization
-from tensorflow.keras.utils import plot_model
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from CustomDropout import MCDropout, DropConnect
 
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
@@ -38,11 +34,11 @@ class NNDropout(Model):
         self.weight_decay = ((1 - self.p_dropout[0]) * self.ls**2.0) / (2.0 * self.N * self.tau)
 
         self.norm = Normalization()
-        self.dense0 = Dense(self.n_neurons[0], activation = "relu", kernel_regularizer=tf.keras.regularizers.L2(self.weight_decay))#, kernel_regularizer=tf.keras.regularizers.L2()
-        self.dense1 = Dense(self.n_neurons[1], activation = "relu", kernel_regularizer=tf.keras.regularizers.L2(self.weight_decay))
-        self.dense2 = Dense(self.n_neurons[2], activation = "relu", kernel_regularizer=tf.keras.regularizers.L2(self.weight_decay))
-        self.dense3 = Dense(self.n_neurons[3], activation = "relu", kernel_regularizer=tf.keras.regularizers.L2(self.weight_decay))
-        self.end = Dense(output, activation=None, kernel_regularizer=tf.keras.regularizers.L2((self.ls**2.0) / (2.0 * self.N * self.tau)))
+        self.dense0 = Dense(self.n_neurons[0], activation = "relu")
+        self.dense1 = Dense(self.n_neurons[1], activation = "relu")
+        self.dense2 = Dense(self.n_neurons[2], activation = "relu")
+        self.dense3 = Dense(self.n_neurons[3], activation = "relu")
+        self.end = Dense(output, activation=None)
         
     @property
     def output(self) -> int:
@@ -109,7 +105,25 @@ class NNDropout(Model):
         return loss
 
 
-class NNfuncs():
+class NNDropConnect(NNDropout):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dense0 = DropConnect(units=self.n_neurons[0], p_dropout=self.p_dropout[0], activation = "relu")
+        self.dense1 = DropConnect(units=self.n_neurons[1], p_dropout=self.p_dropout[1], activation = "relu")
+        self.dense2 = DropConnect(units=self.n_neurons[2], p_dropout=self.p_dropout[2], activation = "relu")
+        self.dense3 = DropConnect(units=self.n_neurons[3], p_dropout=self.p_dropout[3], activation = "relu")
+
+    def call(self, x, training=False):
+        x = self.norm(x)
+        x = self.dense0(x, training=training)
+        x = self.dense1(x, training=training)
+        x = self.dense2(x, training=training)
+        x = self.dense3(x, training=training)
+        x = self.end(x)
+        return x
+
+
+class NNRegressor():
     def __init__(self, model:NNDropout=None):
         self.model = model
         self.output = model.output
@@ -126,7 +140,7 @@ class NNfuncs():
     def _model_check(self):
         assert self._model, "Method requires a model to be defined."
     
-    def fit_regression(self, Xdata:Sequence, mc:bool=False, T:int=100):
+    def predict(self, Xdata:Sequence, mc:bool=False, T:int=100):
         self.mc = mc
         self.X = Xdata
         self._model_check()
@@ -148,7 +162,7 @@ class NNfuncs():
             return self.y_m, self.y_v, self.si2, self.y_cv
         
 
-    def plot_regression(self, Xtrain:Sequence=None, Ytrain:Sequence=None):
+    def plot(self, Xtrain:Sequence=None, Ytrain:Sequence=None, combined:bool=False, title:str="Baseline"):
         assert(self.reginstance == True), "Plot requires a fitted model."
         fig, ax = plt.subplots(1,1,figsize=(12,8))
 
@@ -176,28 +190,39 @@ class NNfuncs():
             fig.tight_layout()
 
         elif self.output==2:
+            if combined:
+                var = self.y_cv
+                labels = ["Epistemic uncertainty- 1SD", "Epistemic uncertainty- 2SD"]
+            elif not combined:
+                var = self.y_v
+                labels = ["Combined uncertainty- 1SD", "Combined uncertainty- 2SD"]
+
             ax.scatter(Xtrain, Ytrain, c="purple", alpha=0.2)
-            ax2 = ax.twinx()
-            ax2.plot(self.X, np.sqrt(tf.squeeze(self.si2)), color="green", label="Aleatoric uncertainty")
-            ax2.set_ylabel('Aleatoric Uncertainty')
+            if combined:
+                ax2 = ax.twinx()
+                ax2.plot(self.X, np.sqrt(tf.squeeze(self.si2)), color="green", label="Aleatoric uncertainty")
+                ax2.set_ylabel('Aleatoric Uncertainty')
             color_pred = (0.0, 101.0 / 255.0, 189.0 / 255.0)
             ax.plot(self.X, np.reshape(self.y_m, (len(self.X),)), color=color_pred)
             ax.set_ylabel("Y")
             ax.fill_between(
                 self.X.reshape(len(self.X),), 
-                tf.squeeze(self.y_m - np.sqrt(self.y_v)), 
-                tf.squeeze(self.y_m + np.sqrt(self.y_v)),
+                tf.squeeze(self.y_m - np.sqrt(var)), 
+                tf.squeeze(self.y_m + np.sqrt(var)),
                 alpha=0.25,
                 color=color_pred,
-                label="Epistemic uncertainty- 1SD"
+                label=labels[0]
             )
             ax.fill_between(
                 self.X.reshape(len(self.X),),
-                tf.squeeze(self.y_m - 2. * np.sqrt(self.y_v)), 
-                tf.squeeze(self.y_m + 2. * np.sqrt(self.y_v)),
+                tf.squeeze(self.y_m - 2. * np.sqrt(var)), 
+                tf.squeeze(self.y_m + 2. * np.sqrt(var)),
                 alpha=0.35,
                 color=color_pred,
-                label="Epistemic uncertainty- 2SD"
+                label=labels[1]
             )
             ax.legend(loc="upper right")
             fig.tight_layout()
+        
+        ax.set_title(title)
+        return fig
