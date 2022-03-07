@@ -28,10 +28,10 @@ class NNDropout(Model):
         self.p_dropout = p_dropout
         self.output = output
 
-        self.N = 100 #num datapoints, constant for simplicity
-        self.tau = 1
-        self.ls = 1e-2
-        self.weight_decay = ((1 - self.p_dropout[0]) * self.ls**2.0) / (2.0 * self.N * self.tau)
+        # self.N = 100 #num datapoints, constant for simplicity
+        # self.tau = 1
+        # self.ls = 1e-2
+        # self.weight_decay = ((1 - self.p_dropout[0]) * self.ls**2.0) / (2.0 * self.N * self.tau)
 
         self.norm = Normalization()
         self.dense0 = Dense(self.n_neurons[0], activation = "relu")
@@ -192,13 +192,14 @@ class NNRegressor():
         elif self.output==2:
             if combined:
                 var = self.y_cv
-                labels = ["Epistemic uncertainty- 1SD", "Epistemic uncertainty- 2SD"]
+                labels = ["Combined uncertainty- 1SD", "Combined uncertainty- 2SD"]
+                
             elif not combined:
                 var = self.y_v
-                labels = ["Combined uncertainty- 1SD", "Combined uncertainty- 2SD"]
+                labels = ["Epistemic uncertainty- 1SD", "Epistemic uncertainty- 2SD"]
 
             ax.scatter(Xtrain, Ytrain, c="purple", alpha=0.2)
-            if combined:
+            if not combined:
                 ax2 = ax.twinx()
                 ax2.plot(self.X, np.sqrt(tf.squeeze(self.si2)), color="green", label="Aleatoric uncertainty")
                 ax2.set_ylabel('Aleatoric Uncertainty')
