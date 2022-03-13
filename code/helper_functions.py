@@ -7,16 +7,18 @@ import seaborn as sns
 from tqdm import tqdm
 
 
-def plot_history(history, cols, title=""):
+def plot_history(history, cols, title="", ax=None):
     results = pd.DataFrame(history)
     results = results.loc[:, cols]
-    fig, ax = plt.subplots(figsize=(14,14))
+    if ax == None:
+        fig, ax = plt.subplots(figsize=(14,14))
     ax = results.plot(ax=ax)
     ax.set_ylim(0,1.1)
     ax.set_title(title)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    return fig
+    if ax == None:
+        return fig
 
 def evaluate_measures(SAVEPATH, model_titles, plotters, use_mc, datasets, dataset_names, 
                       out_sample, wrong_color, max_batches=5, T = 10):
