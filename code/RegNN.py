@@ -28,11 +28,6 @@ class NNDropout(Model):
         self.p_dropout = p_dropout
         self.output = output
 
-        # self.N = 100 #num datapoints, constant for simplicity
-        # self.tau = 1
-        # self.ls = 1e-2
-        # self.weight_decay = ((1 - self.p_dropout[0]) * self.ls**2.0) / (2.0 * self.N * self.tau)
-
         self.norm = Normalization()
         self.dense0 = Dense(self.n_neurons[0], activation = "relu")
         self.dense1 = Dense(self.n_neurons[1], activation = "relu")
@@ -65,13 +60,15 @@ class NNDropout(Model):
         self._p_dropout = p
         
     def call(self, x, training):
+        # x = tf.keras.layers.InputLayer(input_shape=(self.output,1))(x)
         x = self.norm(x)
-        x = self.dense0(x)
         x = Dropout(self.p_dropout[0])(x, training=training)
-        x = self.dense1(x)
+        x = self.dense0(x)
         x = Dropout(self.p_dropout[1])(x, training=training)
-        x = self.dense2(x)
+        x = self.dense1(x)
         x = Dropout(self.p_dropout[2])(x, training=training)
+        x = self.dense2(x)
+        x = Dropout(self.p_dropout[3])(x, training=training)
         x = self.dense3(x)
         x = Dropout(self.p_dropout[3])(x, training=training)
         x = self.end(x)
@@ -82,7 +79,7 @@ class NNDropout(Model):
 
         if self.output==1: # 2015 paper
             y_m = tf.math.reduce_mean(predictions, axis=0)
-            y_v = tf.math.reduce_variance(predictions, axis=0)
+            y_v = tf.subtract(tf.divide(tf.reduce_sum(tf.math.multiply(predictions, predictions), axis=0),T),tf.math.square(y_m))
             return y_m, y_v
 
         elif self.output!=1: # 2017 paper, two-headed combined variance
@@ -94,14 +91,14 @@ class NNDropout(Model):
 
     def build_graph(self, dim):
         x = tf.keras.Input(shape=dim)
-        return tf.keras.Model(inputs=[x], outputs=self.call(x))
+        return tf.keras.Model(inputs=x, outputs=self.call(x, training=True))
 
     @staticmethod
     def nll(y_train, y_pred):
         y_train = tf.reshape(y_train, [-1])
         mu = y_pred[:,0]
         sigma = y_pred[:,1]
-        loss = tf.reduce_mean((sigma + tf.square(y_train-mu)/tf.math.exp(sigma)) / 2.)
+        loss = tf.reduce_mean(tf.math.divide(tf.math.add(sigma, tf.square(y_train-mu)/tf.math.exp(sigma)),2.))
         return loss
 
 
@@ -162,7 +159,7 @@ class NNRegressor():
             return self.y_m, self.y_v, self.si2, self.y_cv
         
 
-    def plot(self, Xtrain:Sequence=None, Ytrain:Sequence=None, combined:bool=False, title:str="Baseline"):
+    def plot(self, Xtrain:Sequence=None, Ytrain:Sequence=None, combined:bool=False, title:str="Baseline", **kwargs):
         assert(self.reginstance == True), "Plot requires a fitted model."
         fig, ax = plt.subplots(1,1,figsize=(12,8))
 
@@ -203,6 +200,7 @@ class NNRegressor():
                 ax2 = ax.twinx()
                 ax2.plot(self.X, np.sqrt(tf.squeeze(self.si2)), color="green", label="Aleatoric uncertainty")
                 ax2.set_ylabel('Aleatoric Uncertainty')
+                ax2.legend(loc="upper left")
             color_pred = (0.0, 101.0 / 255.0, 189.0 / 255.0)
             ax.plot(self.X, np.reshape(self.y_m, (len(self.X),)), color=color_pred)
             ax.set_ylabel("Y")
@@ -223,7 +221,10 @@ class NNRegressor():
                 label=labels[1]
             )
             ax.legend(loc="upper right")
-            fig.tight_layout()
-        
+        if "ylims" in kwargs:
+            ylims = kwargs.get("ylims")
+            ax.set_ylim(bottom=ylims[0], top=ylims[1])
+        fig.tight_layout()
+    
         ax.set_title(title)
         return fig
